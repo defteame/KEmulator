@@ -98,7 +98,7 @@ rm -f "$BUILD/jar/META-INF/"*.SF "$BUILD/jar/META-INF/"*.RSA "$BUILD/jar/META-IN
 find "$BUILD/jar" -name module-info.class -delete
 cp -R "$BUILD/classes/." "$BUILD/jar/"
 cp -R src/res/. "$BUILD/jar/"
-REVISION="$(git describe --tags --always HEAD 2>/dev/null || echo unknown)"
+REVISION="$(git describe --tags --always --dirty 2>/dev/null || echo unknown)"
 printf 'Manifest-Version: 1.0\nGit-Revision: %s\n' "$REVISION" > "$BUILD/jar/META-INF/version.mf"
 rm -f "$OUT/KEmulator.jar" "$OUT/micro3d_gl.jar" "$OUT/micro3d_sw.jar"
 "$JAR" cfm "$OUT/KEmulator.jar" src/main/META-INF/MANIFEST.MF -C "$BUILD/jar" .
