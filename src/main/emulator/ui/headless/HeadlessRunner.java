@@ -79,6 +79,8 @@ public final class HeadlessRunner {
 	private static int commandsRun;
 	private static int commandsTotal;
 	private static long runStart;
+	/** The script has started (runWithMidlet). */
+	private static volatile boolean playing;
 
 	private HeadlessRunner() {
 	}
@@ -93,6 +95,16 @@ public final class HeadlessRunner {
 		frontend = f;
 		recorder = new Recorder(HeadlessOptions.out);
 		runStart = System.nanoTime();
+		// a run that ends without finish (the MIDlet could not be started,
+		// Ctrl+C) still gets its report
+		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+			public void run() {
+				if (!playing) {
+					errors.add("the run ended before the script could start");
+				}
+				complete(EXIT_ERROR);
+			}
+		}, "KEmulator-Report"));
 		VirtualClock.slowListener = new VirtualClock.SlowListener() {
 			public void slow(String threads) {
 				slowSteps++;
@@ -133,6 +145,21 @@ public final class HeadlessRunner {
 		event("destroyed");
 		synchronized (sleeper) {
 			sleeper.notifyAll();
+		}
+	}
+
+	/**
+	 * A message box of the emulator. Before the script runs these are the
+	 * reasons the MIDlet cannot start: errors.
+	 */
+	static void message(String title, String detail) {
+		event("message \"" + title + "\"");
+		String text = title + (detail != null ? "\n" + detail : "");
+		if (playing) {
+			warning(text);
+		} else {
+			errors.add(title);
+			System.err.println("KEmulator headless: " + text);
 		}
 	}
 
@@ -198,6 +225,7 @@ public final class HeadlessRunner {
 	// ---- the script ----
 
 	static void run() {
+		playing = true;
 		int code;
 		try {
 			code = play();
@@ -654,9 +682,17 @@ public final class HeadlessRunner {
 	// ---- the end ----
 
 	static void finish(int code) {
+		int result = complete(code);
+		if (result >= 0) {
+			System.exit(result);
+		}
+	}
+
+	/** Writes the results, once; returns the exit code, or -1 if they were written already. */
+	private static int complete(int code) {
 		synchronized (finishLock) {
 			if (finished) {
-				return;
+				return -1;
 			}
 			finished = true;
 		}
@@ -696,7 +732,7 @@ public final class HeadlessRunner {
 		}
 		HeadlessLog.console.println("  output: " + HeadlessOptions.out);
 		HeadlessLog.console.flush();
-		System.exit(code);
+		return code;
 	}
 
 	private static String status(int code) {

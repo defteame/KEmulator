@@ -158,12 +158,11 @@ final class HeadlessScreen implements IScreen {
 	}
 
 	public void showMessage(String message) {
-		HeadlessRunner.event("message \"" + message + "\"");
+		HeadlessRunner.message(message, null);
 	}
 
 	public void showMessage(String title, String detail) {
-		HeadlessRunner.event("message \"" + title + "\"");
-		HeadlessRunner.warning(title + (detail != null ? "\n" + detail : ""));
+		HeadlessRunner.message(title, detail);
 	}
 
 	public void showMessageThreadSafe(String title, String detail) {
