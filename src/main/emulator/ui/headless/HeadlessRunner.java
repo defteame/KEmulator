@@ -93,7 +93,16 @@ public final class HeadlessRunner {
 		frontend = f;
 		recorder = new Recorder(HeadlessOptions.out);
 		runStart = System.nanoTime();
+		VirtualClock.slowListener = new VirtualClock.SlowListener() {
+			public void slow(String threads) {
+				slowSteps++;
+				System.err.println("slow step (" + VirtualClock.SLOW_MS + " ms and more) at " + recorder.time() + " ms:\n" + threads);
+			}
+		};
 	}
+
+	/** Steps where the MIDlet's threads took SLOW_MS or more of real time to become idle. */
+	private static int slowSteps;
 
 	// ---- callbacks from the emulator ----
 
@@ -777,6 +786,7 @@ public final class HeadlessRunner {
 		if (VirtualClock.enabled) {
 			time.put("midletRealMs", busyNanos / 1000000L);
 			time.put("speed", realMs > 0 ? (double) runMs / realMs : null);
+			time.put("slowSteps", slowSteps);
 		}
 		r.put("time", time);
 

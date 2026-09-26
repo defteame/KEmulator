@@ -336,7 +336,9 @@ public final class VirtualClock {
 	 * Returns false on timeout.
 	 */
 	public static boolean awaitIdle(long timeoutMs) throws InterruptedException {
-		long end = System.currentTimeMillis() + timeoutMs;
+		long start = System.currentTimeMillis();
+		long end = start + timeoutMs;
+		boolean reported = false;
 		for (;;) {
 			int before;
 			synchronized (lock) {
@@ -348,14 +350,33 @@ public final class VirtualClock {
 					spinReads = 0;
 					return true;
 				}
-				long left = end - System.currentTimeMillis();
+			}
+			long now = System.currentTimeMillis();
+			if (!reported && now - start >= SLOW_MS && slowListener != null) {
+				reported = true;
+				slowListener.slow(describeThreads());
+			}
+			synchronized (lock) {
+				long left = end - now;
 				if (left <= 0) {
 					return false;
 				}
-				lock.wait(Math.min(left, 2));
+				if (before == changes) {
+					lock.wait(Math.min(left, 2));
+				}
 			}
 		}
 	}
+
+	/** How long a wait for the threads to become idle may take before the listener hears of it. */
+	public static final long SLOW_MS = 250;
+
+	public interface SlowListener {
+		void slow(String threads);
+	}
+
+	/** Told (once per wait) when the threads take longer than SLOW_MS to become idle. */
+	public static volatile SlowListener slowListener;
 
 	/** The managed threads that are busy now. */
 	public static java.util.List<Thread> busyThreads() {
