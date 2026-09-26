@@ -185,7 +185,14 @@ With `-vtime` time does not pass by itself. The script moves it: `wait 1000`
 runs everything the MIDlet would do in that second (timer tasks, sleeping
 threads waking up, repaints), jumping from one moment something happens to the
 next, without waiting in real time. Key presses arrive at exact moments. The
-run is deterministic and usually 10 to 100 times faster than real time.
+run is deterministic and much faster than real time: a timer-driven game like
+Nokia's Water Rapids runs 50 to 250 times faster on a desktop PC, depending on
+how much it draws.
+
+Runs in parallel slow each other down more than their CPU use suggests: the
+MIDlet's threads hand over to each other many times per second of game time,
+and every hand-over waits for the operating system to run the next thread. On a
+busy machine, run fewer at a time.
 
 What goes through the virtual clock, in the MIDlet's code: `System.currentTimeMillis`,
 `Thread.sleep`, `Thread.yield`, `Thread.join`, `Object.wait`, `notify` and

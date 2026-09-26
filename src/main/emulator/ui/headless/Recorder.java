@@ -79,6 +79,9 @@ final class Recorder {
 
 	/** ms since the start of the run: virtual with -vtime, else real. */
 	long time() {
+		if (stopped) {
+			return end;
+		}
 		return VirtualClock.enabled ? VirtualClock.now() - virtualStart : realMillis();
 	}
 
@@ -87,12 +90,33 @@ final class Recorder {
 	}
 
 	synchronized void event(String text) {
+		if (stopped) {
+			return;
+		}
 		trace.println("E " + frames + " " + time() + " " + text.replace('\n', ' '));
 		trace.flush();
 	}
 
+	/**
+	 * Ends the recording: what the MIDlet does from now on (in real time it
+	 * goes on running while the report is written) is not recorded.
+	 */
+	synchronized void stop() {
+		if (!stopped) {
+			end = time();
+			stopped = true;
+		}
+	}
+
+	private volatile boolean stopped;
+	/** The time the recording stopped. */
+	private long end;
+
 	/** A frame reached the screen. */
 	synchronized void frame(IImage screen, String displayable, boolean canvas, long paintNanos) {
+		if (stopped) {
+			return;
+		}
 		BufferedImage img = ((ImageAWT) screen).getBufferedImage();
 		int w = img.getWidth(), h = img.getHeight();
 		int[] px = img.getRGB(0, 0, w, h, null, 0, w);
@@ -241,11 +265,13 @@ final class Recorder {
 		private long sum;
 
 		void add(long v) {
-			if (n == values.length) {
-				values = Arrays.copyOf(values, n * 2);
+			synchronized (this) {
+				if (n == values.length) {
+					values = Arrays.copyOf(values, n * 2);
+				}
+				values[n++] = v;
+				sum += v;
 			}
-			values[n++] = v;
-			sum += v;
 		}
 
 		int count() {
@@ -254,14 +280,20 @@ final class Recorder {
 
 		Map<String, Object> summary() {
 			Map<String, Object> m = Json.object();
+			long[] sorted;
+			long total;
+			synchronized (this) {
+				sorted = Arrays.copyOf(values, n);
+				total = sum;
+			}
+			int n = sorted.length;
 			m.put("count", n);
 			if (n == 0) {
 				return m;
 			}
-			long[] sorted = Arrays.copyOf(values, n);
 			Arrays.sort(sorted);
 			m.put("min", sorted[0]);
-			m.put("mean", (double) sum / n);
+			m.put("mean", (double) total / n);
 			m.put("p50", sorted[(n - 1) / 2]);
 			m.put("p95", sorted[(int) Math.min(n - 1, Math.ceil(n * 0.95) - 1)]);
 			m.put("p99", sorted[(int) Math.min(n - 1, Math.ceil(n * 0.99) - 1)]);

@@ -75,11 +75,17 @@ public final class HeadlessOptions {
 
 	public static void parse(String[] args) {
 		StringBuilder cl = new StringBuilder();
+		for (String a : args) {
+			if (cl.length() > 0) {
+				cl.append(' ');
+			}
+			// quoted when it has a space, so that the line can be run again
+			cl.append(a.indexOf(' ') >= 0 ? '"' + a + '"' : a);
+		}
 		String outPath = "headless-out";
 		String userPath = null;
 		String rmsPath = null;
 		for (int i = 0; i < args.length; i++) {
-			cl.append(i == 0 ? "" : " ").append(args[i]);
 			String a = args[i];
 			if (!a.startsWith("-")) {
 				continue;

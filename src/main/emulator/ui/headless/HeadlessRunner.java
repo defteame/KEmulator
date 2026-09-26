@@ -696,6 +696,8 @@ public final class HeadlessRunner {
 			}
 			finished = true;
 		}
+		// in real time the MIDlet goes on running: the results are those of now
+		recorder.stop();
 		if (code == EXIT_OK) {
 			if (!errors.isEmpty()) {
 				code = EXIT_ERROR;
@@ -712,11 +714,13 @@ public final class HeadlessRunner {
 			warning("cannot read the record stores: " + e);
 		}
 		try {
+			String json = Json.write(report(code, rms));
 			Writer w = new OutputStreamWriter(new FileOutputStream(new File(HeadlessOptions.out, "report.json")), StandardCharsets.UTF_8);
-			w.write(Json.write(report(code, rms)));
+			w.write(json);
 			w.close();
 		} catch (Throwable e) {
 			System.err.println("cannot write report.json: " + e);
+			e.printStackTrace();
 		}
 		recorder.close();
 		frontend.dispose();
