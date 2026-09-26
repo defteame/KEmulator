@@ -478,6 +478,11 @@ public class ListSWT extends SWTScreen implements IListImpl {
 		return false;
 	}
 
+	public int getFocusedIndex() {
+		int sel = choiceImpl.getSelectedIndex();
+		return sel == -1 ? 0 : sel;
+	}
+
 	public void drawScrollBar(Graphics graphics) {
 
 	}

@@ -133,6 +133,10 @@ public class ListLCDUI implements IListImpl {
 		return choice.size();
 	}
 
+	public int getFocusedIndex() {
+		return Math.max(0, highlighted());
+	}
+
 	/** The highlighted item, or -1 if the list is empty. */
 	private int highlighted() {
 		if (size() == 0) {

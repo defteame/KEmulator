@@ -234,6 +234,12 @@ public class List extends Screen implements Choice {
 		impl.layout();
 	}
 
+	/** A list drawn by the emulator shows the number of its highlighted item. */
+	int _titleCounter() {
+		if (impl.size() == 0) return 0;
+		return impl.getFocusedIndex() + 1;
+	}
+
 	public void _invokeKeyPressed(final int n) {
 		if (!impl.isSWT() && impl.keyPressed(n, false)) return;
 		super._invokeKeyPressed(n);

@@ -12,4 +12,7 @@ public interface IListImpl extends Choice, IScreenImpl {
 
 	/** Navigation keys for a list the emulator draws itself. Returns true if the key was used. */
 	boolean keyPressed(int key, boolean repeat);
+
+	/** The highlighted item (the selected one, except in a multiple-choice list). */
+	int getFocusedIndex();
 }

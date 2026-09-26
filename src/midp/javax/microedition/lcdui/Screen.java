@@ -132,7 +132,7 @@ public abstract class Screen extends Displayable {
 		if (_isSWT()) return;
 		String title = super.title == null ? "" : super.title.trim();
 		final int n;
-		final String value = String.valueOf(n = ((focusedItem != null) ? (this.items.indexOf(focusedItem) + 1) : this.items.size()));
+		final String value = String.valueOf(n = _titleCounter());
 		final int n2 = (Screen.fontHeight4 >> 1) - 1;
 		final int stringWidth2 = Screen.font.stringWidth(value);
 		int w = super.w - stringWidth2 - 16 - Screen.font.stringWidth("...");
@@ -153,6 +153,11 @@ public abstract class Screen extends Displayable {
 	}
 
 	protected void sizeChanged(final int w, final int h) {
+	}
+
+	/** The number at the right of the title bar: the focused item (or the number of items). */
+	int _titleCounter() {
+		return (focusedItem != null) ? (this.items.indexOf(focusedItem) + 1) : this.items.size();
 	}
 
 	void _invokeSizeChanged(int w, int h, boolean b) {

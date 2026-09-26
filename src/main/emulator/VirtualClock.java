@@ -46,7 +46,10 @@ public final class VirtualClock {
 	private static volatile long now;
 	private static long sequence;
 	private static long notifications;
-	private static int changes;
+	/** Counts the times a managed thread became idle or busy (read without the lock while spinning). */
+	private static volatile int changes;
+	/** How long the driver spins waiting for the threads before it sleeps. */
+	private static final long SPIN_NANOS = 50000;
 	private static int spinReads;
 	private static ThreadGroup group;
 
@@ -355,6 +358,15 @@ public final class VirtualClock {
 			if (!reported && now - start >= SLOW_MS && slowListener != null) {
 				reported = true;
 				slowListener.slow(describeThreads());
+			}
+			// the thread just woken usually finishes within microseconds: look
+			// again after a short spin rather than going through the OS
+			long spinEnd = System.nanoTime() + SPIN_NANOS;
+			while (changes == before && System.nanoTime() < spinEnd) {
+				// spin
+			}
+			if (changes != before) {
+				continue;
 			}
 			synchronized (lock) {
 				long left = end - now;
