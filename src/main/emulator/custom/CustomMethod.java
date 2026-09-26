@@ -5,6 +5,7 @@ import emulator.AppSettings;
 import emulator.Emulator;
 import emulator.Permission;
 import emulator.Settings;
+import emulator.VirtualClock;
 import emulator.custom.h.MethodInfo;
 import emulator.debug.Profiler;
 import emulator.graphics3D.lwjgl.Emulator3D;
@@ -13,7 +14,10 @@ import emulator.ui.swt.EmulatorScreen;
 import javax.microedition.media.Manager;
 import java.awt.*;
 import java.io.*;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
 import java.util.Hashtable;
+import java.util.TimeZone;
 
 public class CustomMethod {
 	private static long aLong13;
@@ -37,6 +41,10 @@ public class CustomMethod {
 	}
 
 	public static void yield() throws InterruptedException {
+		if (VirtualClock.enabled) {
+			VirtualClock.yield();
+			return;
+		}
 		if (AppSettings.patchYield) {
 			Thread.sleep(1L);
 		} else {
@@ -46,6 +54,10 @@ public class CustomMethod {
 
 	public static void sleep(long t) throws InterruptedException {
 		if (AppSettings.ignoreSleep) return;
+		if (VirtualClock.enabled) {
+			VirtualClock.sleep(t);
+			return;
+		}
 		if (AppSettings.applySpeedToSleep && AppSettings.speedModifier != 1 && t > 1) {
 			if (AppSettings.speedModifier < 0) {
 				t = t * ((100L - AppSettings.speedModifier * 1024L) / 100L);
@@ -206,6 +218,9 @@ public class CustomMethod {
 
 	public static long currentTimeMillis() {
 		++Profiler.currentTimeMillisCallCount;
+		if (VirtualClock.enabled) {
+			return VirtualClock.programTime();
+		}
 		final long currentTimeMillis = System.currentTimeMillis();
 		final long n2;
 		final long n = ((n2 = AppSettings.speedModifier) < 0L) ? ((100L + n2 << 10) / 100L) : (n2 << 10);
@@ -356,6 +371,72 @@ public class CustomMethod {
 
 	public static String getEncoding() {
 		return AppSettings.fileEncoding;
+	}
+
+	// Virtual time (-headless -vtime): the class loader sends these calls here
+	// from MIDlet code, see CustomMethodAdapter.
+
+	/** Seed for new Random() with virtual time: fixed with -seed, else the clock (as CLDC does). */
+	public static Long randomSeed;
+
+	public static long randomSeed() {
+		return randomSeed != null ? randomSeed : VirtualClock.programTime();
+	}
+
+	public static Calendar calendar() {
+		return calendar(TimeZone.getDefault());
+	}
+
+	public static Calendar calendar(TimeZone zone) {
+		Calendar c = new GregorianCalendar(zone);
+		c.setTimeInMillis(VirtualClock.programTime());
+		return c;
+	}
+
+	public static void waitFor(Object o) throws InterruptedException {
+		waitFor(o, 0L);
+	}
+
+	public static void waitFor(Object o, long timeout, int nanos) throws InterruptedException {
+		if (nanos < 0 || nanos > 999999) {
+			throw new IllegalArgumentException("nanosecond timeout value out of range");
+		}
+		waitFor(o, timeout > 0 || nanos == 0 ? timeout : 1);
+	}
+
+	public static void waitFor(Object o, long timeout) throws InterruptedException {
+		if (timeout < 0) {
+			throw new IllegalArgumentException("timeout value is negative");
+		}
+		if (!Thread.holdsLock(o)) {
+			throw new IllegalMonitorStateException();
+		}
+		VirtualClock.await(o, timeout);
+	}
+
+	public static void notifyOne(Object o) {
+		if (!Thread.holdsLock(o)) {
+			throw new IllegalMonitorStateException();
+		}
+		VirtualClock.notify(o, false);
+	}
+
+	public static void notifyAll(Object o) {
+		if (!Thread.holdsLock(o)) {
+			throw new IllegalMonitorStateException();
+		}
+		VirtualClock.notify(o, true);
+	}
+
+	public static void join(Thread t) throws InterruptedException {
+		VirtualClock.join(t, 0);
+	}
+
+	public static void join(Thread t, long ms) throws InterruptedException {
+		if (ms < 0) {
+			throw new IllegalArgumentException("timeout value is negative");
+		}
+		VirtualClock.join(t, ms);
 	}
 
 	static {

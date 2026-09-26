@@ -1,6 +1,7 @@
 package javax.microedition.lcdui;
 
 import emulator.Emulator;
+import emulator.VirtualClock;
 import emulator.UILocale;
 import emulator.lcdui.LCDUIUtils;
 import emulator.lcdui.TextUtils;
@@ -13,7 +14,7 @@ public class Alert extends Screen {
 	private String[] textArr;
 	Displayable lastDisplayed;
 	private Gauge gauge;
-	private long timeShown = System.currentTimeMillis();;
+	private long timeShown = VirtualClock.currentTimeMillis();
 
 	public Alert(final String s) {
 		this(s, null, null, null);
@@ -65,7 +66,7 @@ public class Alert extends Screen {
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
-		timeShown = System.currentTimeMillis();
+		timeShown = VirtualClock.currentTimeMillis();
 	}
 
 	public Image getImage() {
@@ -120,7 +121,7 @@ public class Alert extends Screen {
 				&& timeShown != 0
 				&& timeout >= 0
 				&& commands.size() <= 1
-				&& System.currentTimeMillis() - timeShown > timeout) {
+				&& VirtualClock.currentTimeMillis() - timeShown > timeout) {
 			close();
 		}
 	}

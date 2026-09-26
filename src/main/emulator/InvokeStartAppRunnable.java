@@ -10,6 +10,7 @@ final class InvokeStartAppRunnable implements Runnable {
 	}
 
 	public final void run() {
+		VirtualClock.startGate();
 		try {
 			Emulator.getMIDlet().invokeStartApp();
 			Emulator.getEmulator().getScreen().appStarted(first);

@@ -6,6 +6,7 @@ public final class InvokeDestroyAppRunnable implements Runnable {
 	}
 
 	public final void run() {
+		VirtualClock.startGate();
 		Emulator.getMIDlet().invokeDestroyApp(true);
 	}
 }

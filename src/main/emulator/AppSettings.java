@@ -4,6 +4,7 @@ Copyright (c) 2026 Arman Jussupgaliyev
 package emulator;
 
 import emulator.ui.IEmulatorFrontend;
+import emulator.ui.headless.HeadlessOptions;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -326,6 +327,14 @@ public class AppSettings {
 
 		if (reset) return 0;
 
+		if (Emulator.isHeadless()) {
+			// headless runs do not read or write midlets.ini: the command line
+			// sets everything (see HeadlessOptions), so a run is reproducible
+			HeadlessOptions.applyDevice();
+			HeadlessOptions.applySettings();
+			return 1;
+		}
+
 		if (!loadIni(false, null)) {
 			return uei || !Settings.showAppSettingsOnStart ? 1 : 0;
 		}
@@ -511,7 +520,7 @@ public class AppSettings {
 	}
 
 	public static void save() {
-		if (iniSection == null) return;
+		if (iniSection == null || Emulator.isHeadless()) return;
 
 		AppSettings.set("FileEncoding", fileEncoding);
 		AppSettings.set("DevicePreset", devicePreset);
@@ -616,6 +625,7 @@ public class AppSettings {
 	}
 
 	private static boolean loadIni(boolean save, String section) {
+		if (Emulator.isHeadless()) return false;
 		if (section == null) section = iniSection;
 		Path midletsPath = getMidletsPath();
 		String exactSection = '[' + section + ']';

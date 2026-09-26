@@ -44,3 +44,6 @@ micro3d_*.jar
 KEmulator_x64.jar
 kemulator-debug.jar
 version.mf
+
+# command line builds (headless/build.sh)
+/out/

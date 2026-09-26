@@ -8,11 +8,14 @@ import org.apache.tools.zip.ZipFile;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 public final class CustomClassLoader extends ClassLoader {
 	public CustomClassLoader(final ClassLoader classLoader) {
@@ -174,5 +177,83 @@ public final class CustomClassLoader extends ClassLoader {
 
 	public final InputStream getResourceAsStream(final String s) {
 		return super.getResourceAsStream(s);
+	}
+
+	private static final Map<String, Boolean> inheritCache = new HashMap<String, Boolean>();
+
+	/**
+	 * Whether a call of owner.name(desc) in MIDlet code reaches the method of
+	 * the platform class base: owner is base, or a MIDlet class that extends
+	 * it without declaring the method itself.
+	 */
+	public static boolean inheritsFrom(String owner, String base, final String name, final String desc) {
+		String key = owner + ' ' + base + ' ' + name + desc;
+		synchronized (inheritCache) {
+			Boolean cached = inheritCache.get(key);
+			if (cached != null) {
+				return cached;
+			}
+		}
+		boolean result = false;
+		String c = owner;
+		for (int depth = 0; c != null && depth < 64; depth++) {
+			if (c.equals(base)) {
+				result = true;
+				break;
+			}
+			if (!Emulator.jarClasses.contains(c.replace('/', '.'))) {
+				break;
+			}
+			byte[] bytes = classBytes(c);
+			if (bytes == null) {
+				break;
+			}
+			ClassReader reader = new ClassReader(bytes);
+			final boolean[] declares = {false};
+			reader.accept(new ClassVisitor(Opcodes.ASM4) {
+				public MethodVisitor visitMethod(int access, String n, String d, String signature, String[] exceptions) {
+					if (n.equals(name) && d.equals(desc)) {
+						declares[0] = true;
+					}
+					return null;
+				}
+			}, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+			if (declares[0]) {
+				break;
+			}
+			c = reader.getSuperName();
+		}
+		synchronized (inheritCache) {
+			inheritCache.put(key, result);
+		}
+		return result;
+	}
+
+	private static byte[] classBytes(String internalName) {
+		try {
+			synchronized (Emulator.jarFileLock) {
+				InputStream in;
+				if (Emulator.midletJarPath == null) {
+					File f = Emulator.getFileFromClassPath(internalName + ".class");
+					if (f == null || !f.exists()) {
+						return null;
+					}
+					in = new FileInputStream(f);
+				} else {
+					ZipEntry entry = Emulator.midletJar.getEntry(internalName + ".class");
+					if (entry == null) {
+						return null;
+					}
+					in = Emulator.midletJar.getInputStream(entry);
+				}
+				try {
+					return ResourceManager.getBytes(in);
+				} finally {
+					in.close();
+				}
+			}
+		} catch (Exception e) {
+			return null;
+		}
 	}
 }

@@ -3,6 +3,7 @@ package emulator.custom;
 import emulator.AppSettings;
 import emulator.Emulator;
 import emulator.Settings;
+import emulator.VirtualClock;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -11,6 +12,7 @@ public final class CustomMethodAdapter extends MethodVisitor implements Opcodes 
 	private int anInt1185;
 	private String className;
 	private String methodName;
+	private final String rawMethodName;
 	private String methodDesc;
 	private String aString1190;
 	private int sourceLine;
@@ -20,8 +22,66 @@ public final class CustomMethodAdapter extends MethodVisitor implements Opcodes 
 	}
 
 
+	/**
+	 * Virtual time (-headless -vtime): everything in MIDlet code that waits,
+	 * wakes another thread or reads the date goes through the virtual clock.
+	 * Returns true if the call was replaced.
+	 */
+	private boolean virtualTimeCall(final int acc, final String cls, final String name, final String sign) {
+		if (acc == INVOKEVIRTUAL) {
+			// Object's final methods, whatever the static type of the receiver
+			if (name.equals("wait") && (sign.equals("()V") || sign.equals("(J)V") || sign.equals("(JI)V"))) {
+				super.visitMethodInsn(INVOKESTATIC, "emulator/custom/CustomMethod", "waitFor", "(Ljava/lang/Object;" + sign.substring(1));
+				return true;
+			}
+			if ((name.equals("notify") || name.equals("notifyAll")) && sign.equals("()V")) {
+				super.visitMethodInsn(INVOKESTATIC, "emulator/custom/CustomMethod", name.equals("notify") ? "notifyOne" : "notifyAll", "(Ljava/lang/Object;)V");
+				return true;
+			}
+			if (name.equals("join") && (sign.equals("()V") || sign.equals("(J)V"))
+					&& CustomClassLoader.inheritsFrom(cls, "java/lang/Thread", name, sign)) {
+				super.visitMethodInsn(INVOKESTATIC, "emulator/custom/CustomMethod", "join", "(Ljava/lang/Thread;" + sign.substring(1));
+				return true;
+			}
+			return false;
+		}
+		if (acc == INVOKESTATIC) {
+			// Thread.sleep and Thread.yield called through a subclass of Thread
+			// (as an unqualified call in one compiles)
+			if (!cls.equals("java/lang/Thread") && ((name.equals("sleep") && sign.equals("(J)V")) || (name.equals("yield") && sign.equals("()V")))
+					&& CustomClassLoader.inheritsFrom(cls, "java/lang/Thread", name, sign)) {
+				super.visitMethodInsn(INVOKESTATIC, "emulator/custom/CustomMethod", name, sign);
+				return true;
+			}
+			if (cls.equals("java/util/Calendar") && name.equals("getInstance")
+					&& (sign.equals("()Ljava/util/Calendar;") || sign.equals("(Ljava/util/TimeZone;)Ljava/util/Calendar;"))) {
+				super.visitMethodInsn(INVOKESTATIC, "emulator/custom/CustomMethod", "calendar", sign);
+				return true;
+			}
+			return false;
+		}
+		if (acc == INVOKESPECIAL && name.equals("<init>") && sign.equals("()V")) {
+			if (cls.equals("java/util/Date")) {
+				this.method707(2);
+				super.visitMethodInsn(INVOKESTATIC, "emulator/custom/CustomMethod", "currentTimeMillis", "()J");
+				super.visitMethodInsn(INVOKESPECIAL, cls, name, "(J)V");
+				return true;
+			}
+			if (cls.equals("java/util/Random")) {
+				this.method707(2);
+				super.visitMethodInsn(INVOKESTATIC, "emulator/custom/CustomMethod", "randomSeed", "()J");
+				super.visitMethodInsn(INVOKESPECIAL, cls, name, "(J)V");
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public final void visitMethodInsn(final int acc, final String cls, String name, String sign) {
 //		System.out.println("visitMethod " + cls + " " + name + " " + sign);
+		if (VirtualClock.enabled && virtualTimeCall(acc, cls, name, sign)) {
+			return;
+		}
 		Label_0576:
 		{
 			if (cls.equals("java/lang/System")) {
@@ -247,6 +307,7 @@ public final class CustomMethodAdapter extends MethodVisitor implements Opcodes 
 		this.anInt1185 = 0;
 		this.className = aString1186;
 		this.methodName = s;
+		this.rawMethodName = s;
 		this.methodDesc = aString1187;
 		if (Settings.enableNewTrack || Settings.enableMethodTrack) {
 			this.methodName = aString1186 + "." + s;
@@ -415,6 +476,10 @@ public final class CustomMethodAdapter extends MethodVisitor implements Opcodes 
 	}
 
 	public final void visitCode() {
+		if (VirtualClock.enabled && "run".equals(this.rawMethodName) && "()V".equals(this.methodDesc)) {
+			// a new thread starts running MIDlet code: let its creator finish first
+			super.visitMethodInsn(INVOKESTATIC, "emulator/VirtualClock", "startGate", "()V");
+		}
 		if (Settings.enableMethodTrack) {
 			this.method707(1);
 			super.visitLdcInsn((this.methodName + this.methodDesc));

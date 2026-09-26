@@ -6,8 +6,9 @@ import emulator.ui.IScreen;
 import net.rim.device.api.system.Application;
 
 import javax.microedition.lcdui.*;
-import java.util.Timer;
-import java.util.TimerTask;
+import emulator.custom.subclass.SubTimerTask;
+import emulator.custom.subclass.Timer;
+
 import java.util.Vector;
 
 public final class EventQueue implements Runnable {
@@ -45,7 +46,10 @@ public final class EventQueue implements Runnable {
 	private String pointerNumber;
 
 	private Timer screenTimer;
-	private TimerTask screenTimerTask;
+	private SubTimerTask screenTimerTask;
+
+	/** How long the last Canvas or Screen paint took (ns), for the headless frame log. */
+	public volatile long lastPaintNanos;
 
 	public EventQueue() {
 		events = new int[128];
@@ -53,11 +57,11 @@ public final class EventQueue implements Runnable {
 		paused = false;
 		running = true;
 
-		eventThread = new Thread(this, "KEmulator-EventQueue");
+		eventThread = new Thread(VirtualClock.threadGroup(), this, "KEmulator-EventQueue");
 		eventThread.setPriority(3);
 		eventThread.start();
 
-		inputThread = new Thread(input, "KEmulator-InputQueue");
+		inputThread = new Thread(VirtualClock.threadGroup(), input, "KEmulator-InputQueue");
 		inputThread.setPriority(3);
 		inputThread.start();
 
@@ -74,7 +78,7 @@ public final class EventQueue implements Runnable {
 				long time = System.currentTimeMillis();
 				try {
 					while (running) {
-						if (alive || paused || AppSettings.steps >= 0) {
+						if (alive || paused || AppSettings.steps >= 0 || VirtualClock.enabled) {
 							time = System.currentTimeMillis();
 							alive = false;
 						} else if ((System.currentTimeMillis() - time) > 5000) {
@@ -163,7 +167,7 @@ public final class EventQueue implements Runnable {
 			System.arraycopy(events, 0, events = new int[events.length * 2], 0, count);
 		}
 		synchronized (eventLock) {
-			eventLock.notify();
+			VirtualClock.notify(eventLock, false);
 		}
 	}
 
@@ -283,12 +287,21 @@ public final class EventQueue implements Runnable {
 	}
 
 	public void run() {
+		VirtualClock.startGate();
 		int event = 0;
 		try {
 			while (running) {
 				alive = true;
 				if (Emulator.getMIDlet() == null || paused) {
-					Thread.sleep(5);
+					if (VirtualClock.enabled) {
+						synchronized (eventLock) {
+							if (Emulator.getMIDlet() == null || paused) {
+								VirtualClock.await(eventLock, 0);
+							}
+						}
+					} else {
+						Thread.sleep(5);
+					}
 					continue;
 				}
 				try {
@@ -316,7 +329,9 @@ public final class EventQueue implements Runnable {
 							IScreen scr = Emulator.getEmulator().getScreen();
 							final IImage backBufferImage3 = scr.getBackBufferImage();
 							final IImage xRayScreenImage3 = scr.getXRayScreenImage();
+							long paintStart = System.nanoTime();
 							((Screen) d)._invokePaint(new Graphics(backBufferImage3, xRayScreenImage3));
+							lastPaintNanos = System.nanoTime() - paintStart;
 							if (AppSettings.asyncFlush) {
 								try {
 									(AppSettings.xrayView ? xRayScreenImage3 : backBufferImage3)
@@ -434,7 +449,9 @@ public final class EventQueue implements Runnable {
 						}
 						case 0: {
 							synchronized (eventLock) {
-								eventLock.wait(1000);
+								if (count == 0) {
+									VirtualClock.await(eventLock, VirtualClock.enabled ? 0 : 1000);
+								}
 							}
 							break;
 						}
@@ -453,6 +470,7 @@ public final class EventQueue implements Runnable {
 					System.err.println("Exception in Event Thread!");
 					System.err.println("Event: " + event);
 					e.printStackTrace();
+					Emulator.midletException("event " + event, e);
 				}
 			}
 		} catch (InterruptedException ignored) {}
@@ -481,7 +499,12 @@ public final class EventQueue implements Runnable {
 	public void waitRepaint() throws InterruptedException {
 		if (Thread.currentThread() == eventThread) return;
 		while (repaintPending) {
-			Thread.sleep(1);
+			if (VirtualClock.managed(Thread.currentThread())) {
+				// the event thread paints when this thread is idle
+				VirtualClock.yield();
+			} else {
+				Thread.sleep(1);
+			}
 		}
 	}
 
@@ -504,6 +527,7 @@ public final class EventQueue implements Runnable {
 				xRayScreenImage = scr.getXRayScreenImage();
 			}
 			Displayable._checkForSteps(callbackLock);
+			long paintStart = System.nanoTime();
 			try {
 				if (x == -1) { // full repaint
 					canvas._invokePaint(backBufferImage, xRayScreenImage);
@@ -512,7 +536,9 @@ public final class EventQueue implements Runnable {
 				}
 			} catch (Exception ex) {
 				ex.printStackTrace();
+				Emulator.midletException("paint", ex);
 			}
+			lastPaintNanos = System.nanoTime() - paintStart;
 			if (canvas instanceof SpriteCanvas) {
 				if (!((SpriteCanvas) canvas)._skipCopy) {
 					backBufferImage.cloneImage(scr.getScreenImg());
@@ -614,19 +640,20 @@ public final class EventQueue implements Runnable {
 			elements[count++] = o;
 			added = true;
 			synchronized (readLock) {
-				readLock.notify();
+				VirtualClock.notify(readLock, false);
 			}
 		}
 
 		public void run() {
+			VirtualClock.startGate();
 			while (running) {
 				try {
 					synchronized (readLock) {
-						if (!added) readLock.wait();
+						if (!added) VirtualClock.await(readLock, 0);
 					}
 					added = false;
 					while (Emulator.getMIDlet() == null || paused) {
-						Thread.sleep(5);
+						VirtualClock.sleep(5);
 					}
 					while (count > 0) {
 						try {
@@ -639,6 +666,7 @@ public final class EventQueue implements Runnable {
 						} catch (Throwable e) {
 							System.err.println("Exception in Input Thread!");
 							e.printStackTrace();
+							Emulator.midletException("input", e);
 						}
 						synchronized (this) {
 							System.arraycopy(elements, 1, elements, 0, elements.length - 1);
@@ -653,7 +681,7 @@ public final class EventQueue implements Runnable {
 		}
 	}
 
-	private class ScreenTimerTask extends TimerTask {
+	private class ScreenTimerTask extends SubTimerTask {
 		public void run() {
 			queue(EVENT_SCREEN);
 		}

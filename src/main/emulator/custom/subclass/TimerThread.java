@@ -1,5 +1,7 @@
 package emulator.custom.subclass;
 
+import emulator.VirtualClock;
+
 class TimerThread extends Thread {
 	private TaskQueue queue;
 	private static final long THREAD_TIMEOUT = 30000L;
@@ -10,6 +12,7 @@ class TimerThread extends Thread {
 	}
 
 	public void run() {
+		VirtualClock.startGate();
 		try {
 			this.mainLoop();
 		} catch (Throwable t) {
@@ -28,7 +31,7 @@ class TimerThread extends Thread {
 					final boolean b;
 					synchronized (this.queue) {
 						while (this.queue.isEmpty() && this.queue.newTasksMayBeScheduled) {
-							this.queue.wait(30000L);
+							VirtualClock.await(this.queue, THREAD_TIMEOUT);
 							if (this.queue.isEmpty()) {
 								break;
 							}
@@ -44,7 +47,7 @@ class TimerThread extends Thread {
 								this.queue.removeMin();
 								continue;
 							}
-							currentTimeMillis = System.currentTimeMillis();
+							currentTimeMillis = VirtualClock.currentTimeMillis();
 							if (b = ((nextExecutionTime = min.nextExecutionTime) <= currentTimeMillis)) {
 								if (min.period == 0L) {
 									this.queue.removeMin();
@@ -55,13 +58,14 @@ class TimerThread extends Thread {
 							}
 						}
 						if (!b) {
-							this.queue.wait(nextExecutionTime - currentTimeMillis);
+							VirtualClock.await(this.queue, nextExecutionTime - currentTimeMillis);
 						}
 					}
 					if (b) {
 						try {
 							min.run();
 						} catch (Exception ex) {
+							emulator.Emulator.midletException("TimerTask", ex);
 							min.cancel();
 						}
 					}

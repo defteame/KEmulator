@@ -1,5 +1,7 @@
 package emulator.custom.subclass;
 
+import emulator.VirtualClock;
+
 import java.util.Date;
 
 public class Timer {
@@ -15,7 +17,7 @@ public class Timer {
 		if (n < 0L) {
 			throw new IllegalArgumentException("Negative delay.");
 		}
-		this.sched(subTimerTask, System.currentTimeMillis() + n, 0L);
+		this.sched(subTimerTask, VirtualClock.currentTimeMillis() + n, 0L);
 	}
 
 	public void schedule(final SubTimerTask subTimerTask, final Date date) {
@@ -29,7 +31,7 @@ public class Timer {
 		if (n2 <= 0L) {
 			throw new IllegalArgumentException("Non-positive period.");
 		}
-		this.sched(subTimerTask, System.currentTimeMillis() + n, -n2);
+		this.sched(subTimerTask, VirtualClock.currentTimeMillis() + n, -n2);
 	}
 
 	public void schedule(final SubTimerTask subTimerTask, final Date date, final long n) {
@@ -46,7 +48,7 @@ public class Timer {
 		if (n2 <= 0L) {
 			throw new IllegalArgumentException("Non-positive period.");
 		}
-		this.sched(subTimerTask, System.currentTimeMillis() + n, n2);
+		this.sched(subTimerTask, VirtualClock.currentTimeMillis() + n, n2);
 	}
 
 	public void scheduleAtFixedRate(final SubTimerTask subTimerTask, final Date date, final long n) {
@@ -77,7 +79,7 @@ public class Timer {
 			}
 			this.queue.add(subTimerTask);
 			if (this.queue.getMin() == subTimerTask) {
-				this.queue.notify();
+				VirtualClock.notify(this.queue, false);
 			}
 		}
 	}
@@ -86,7 +88,7 @@ public class Timer {
 		synchronized (this.queue) {
 			this.queue.newTasksMayBeScheduled = false;
 			this.queue.clear();
-			this.queue.notify();
+			VirtualClock.notify(this.queue, false);
 		}
 	}
 }

@@ -1,6 +1,8 @@
 package javax.microedition.lcdui;
 
 import emulator.lcdui.ITextBoxImpl;
+import emulator.lcdui.LCDUIUtils;
+import emulator.lcdui.TextBoxLCDUI;
 import emulator.lcdui.TextBoxSWT;
 
 public class TextBox extends Screen {
@@ -9,7 +11,8 @@ public class TextBox extends Screen {
 
 	public TextBox(String title, String text, int maxSize, int constraints) {
 		super(title);
-		impl = new TextBoxSWT(this, title, text, maxSize, constraints);
+		impl = LCDUIUtils.useSwtWidgets() ? new TextBoxSWT(this, title, text, maxSize, constraints)
+				: new TextBoxLCDUI(this, text, maxSize, constraints);
 	}
 
 	void focusCaret() {

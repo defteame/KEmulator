@@ -233,6 +233,11 @@ public class Displayable {
 		return false;
 	}
 
+	/** The commands added to this displayable (headless driver). */
+	public Command[] _getCommands() {
+		return (Command[]) commands.toArray(new Command[0]);
+	}
+
 	public void _callCommandAction(Command command) {
 		if (cmdListener != null && command != null) {
 			cmdListener.commandAction(command, this);
@@ -334,7 +339,7 @@ public class Displayable {
 	}
 
 	public static void _fpsLimiter() {
-		if ((AppSettings.speedModifier == 1 || AppSettings.applySpeedToSleep) && AppSettings.frameRate <= 120) {
+		if (!VirtualClock.enabled && (AppSettings.speedModifier == 1 || AppSettings.applySpeedToSleep) && AppSettings.frameRate <= 120) {
 			long elapsed = System.nanoTime() - lastFrameTime;
 			long target = (MILLI_TO_NANO * 1000L) / AppSettings.frameRate;
 

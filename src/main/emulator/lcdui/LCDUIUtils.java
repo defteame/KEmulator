@@ -1,8 +1,19 @@
 package emulator.lcdui;
 
+import emulator.Emulator;
+import emulator.ui.swt.SWTFrontend;
+
 import javax.microedition.lcdui.Graphics;
 
 public final class LCDUIUtils {
+	/**
+	 * Lists and text boxes are SWT widgets in the SWT window; without it
+	 * (headless, bridge) the emulator draws them itself.
+	 */
+	public static boolean useSwtWidgets() {
+		return Emulator.getEmulator() instanceof SWTFrontend;
+	}
+
 	public static int backgroundColor = 0xFFEFF0F0; // 0xFFEFF0F0
 	public static int foregroundColor = 0xFF000000; // 0xFF000000
 	public static int highlightedForegroundColor = 0xFF556D95;

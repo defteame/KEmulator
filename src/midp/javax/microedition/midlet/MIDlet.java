@@ -37,6 +37,11 @@ public abstract class MIDlet {
 		for (StackTraceElement e : new Exception().getStackTrace()) {
 			Emulator.getEmulator().getLogStream().println(e.toString());
 		}
+		if (Emulator.isHeadless()) {
+			// the headless driver ends the run and writes its report
+			Emulator.midletDestroyed();
+			return;
+		}
 		Emulator.notifyDestroyed();
 		Emulator.getEmulator().getLogStream().println("Exiting Emulator");
 		CustomMethod.close();
@@ -116,6 +121,7 @@ public abstract class MIDlet {
 		} catch (Exception ex) {
 			System.out.println("destroyApp exception!");
 			ex.printStackTrace();
+			Emulator.midletException("destroyApp", ex);
 		}
 		this.notifyDestroyed();
 	}
@@ -129,6 +135,7 @@ public abstract class MIDlet {
 		} catch (Throwable ex) {
 			System.out.println("startApp exception!");
 			ex.printStackTrace();
+			Emulator.midletException("startApp", ex);
 			throw new RuntimeException(ex);
 		}
 		if (Settings.bypassVserv) {

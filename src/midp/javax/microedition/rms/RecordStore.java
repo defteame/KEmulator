@@ -1,6 +1,7 @@
 package javax.microedition.rms;
 
 import emulator.Emulator;
+import emulator.VirtualClock;
 import emulator.ui.IEmulatorFrontend;
 
 import java.io.*;
@@ -445,7 +446,7 @@ public class RecordStore {
 	}
 
 	private void modify() {
-		lastModified = System.currentTimeMillis();
+		lastModified = VirtualClock.currentTimeMillis();
 		version++;
 	}
 

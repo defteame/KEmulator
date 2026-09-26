@@ -474,6 +474,10 @@ public class ListSWT extends SWTScreen implements IListImpl {
 		return true;
 	}
 
+	public boolean keyPressed(int key, boolean repeat) {
+		return false;
+	}
+
 	public void drawScrollBar(Graphics graphics) {
 
 	}

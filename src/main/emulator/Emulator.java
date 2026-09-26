@@ -9,6 +9,9 @@ import emulator.media.EmulatorMIDI;
 import emulator.media.mmf.MMFPlayer;
 import emulator.ui.IEmulatorFrontend;
 import emulator.ui.bridge.BridgeFrontend;
+import emulator.ui.headless.HeadlessFrontend;
+import emulator.ui.headless.HeadlessOptions;
+import emulator.ui.headless.HeadlessRunner;
 import emulator.ui.swt.EmulatorScreen;
 import emulator.ui.swt.Property;
 import emulator.ui.swt.ResizeMethod;
@@ -65,6 +68,9 @@ public class Emulator implements Runnable {
 	private static boolean forked;
 	private static boolean updated;
 	private static boolean bridge;
+	private static boolean headless;
+	/** Where the emulator keeps its user files (-userdir; headless runs use their own). */
+	public static String userPathOverride;
 	public static boolean doja;
 
 	static int startWidth, startHeight;
@@ -132,7 +138,27 @@ public class Emulator implements Runnable {
 		MMFPlayer.close();
 	}
 
+	/** Running without a window (-headless): see HeadlessMode.md. */
+	public static boolean isHeadless() {
+		return headless;
+	}
+
+	/** An exception thrown by MIDlet code that the emulator caught (logged; a headless run reports it). */
+	public static void midletException(String where, Throwable e) {
+		if (headless) {
+			HeadlessRunner.exception(where, e);
+		}
+	}
+
+	/** notifyDestroyed in a headless run: the run ends and its report is written. */
+	public static void midletDestroyed() {
+		HeadlessRunner.midletDestroyed();
+	}
+
 	public static void notifyDestroyed() {
+		if (headless) {
+			return;
+		}
 		Emulator.emulatorimpl.getProperty().saveProperties();
 		if (Settings.autoGenJad) {
 			generateJad();
@@ -586,6 +612,20 @@ public class Emulator implements Runnable {
 			}
 		} catch (Exception ignored) {
 		}
+		for (String s : args) {
+			if ("-headless".equals(s)) {
+				headless = true;
+			}
+		}
+		if (headless) {
+			try {
+				HeadlessOptions.parse(args);
+			} catch (IllegalArgumentException e) {
+				System.err.println("KEmulator headless: " + e.getMessage());
+				System.exit(HeadlessRunner.EXIT_USAGE);
+				return;
+			}
+		}
 		String arch = System.getProperty("os.arch");
 		if (!platform.isX64() && (!arch.contains("86") || !Utils.win)) {
 			JOptionPane.showMessageDialog(new JPanel(), "Can't run this version of KEmulator nnmod on this architecture (" + arch + "). Try multi-platform version instead.");
@@ -599,6 +639,19 @@ public class Emulator implements Runnable {
 			} catch (Exception e) {
 				librariesException = e;
 			}
+			if (headless) {
+				// no window: SWT's native libraries are never loaded, only its
+				// image decoder is used; missing 3D natives only matter to 3D games
+				if (librariesException != null) {
+					System.err.println("KEmulator headless: " + librariesException);
+					librariesException = null;
+				}
+				try {
+					EmulatorMIDI.initDevices();
+				} catch (Throwable e) {
+					System.err.println("KEmulator headless: no MIDI devices: " + e);
+				}
+			} else
 			EmulatorMIDI.initDevices();
 			Emulator.commandLineArguments = args;
 			UILocale.initLocale();
@@ -615,7 +668,7 @@ public class Emulator implements Runnable {
 			}
 
 			// Restart with additional arguments required for specific os or java version
-			if (!(forked || AppSettings.uei) && (librariesException != null || Utils.macos || Utils.isJava9())) {
+			if (!(forked || AppSettings.uei || headless) && (librariesException != null || Utils.macos || Utils.isJava9())) {
 				loadGame(null, false);
 				return;
 			}
@@ -626,7 +679,9 @@ public class Emulator implements Runnable {
 				return;
 			}
 			
-			if (bridge)
+			if (headless)
+				Emulator.emulatorimpl = new HeadlessFrontend();
+			else if (bridge)
 				Emulator.emulatorimpl = new BridgeFrontend("/tmp/kem/",
 						startWidth != 0 ? startWidth : 240, startHeight != 0 ? startHeight : 320);
 			else
@@ -635,8 +690,16 @@ public class Emulator implements Runnable {
 			// Force m3g engine to LWJGL in x64 build
 			if (platform.isX64()) Settings.g3d = 1;
 
-			platform.load3D();
-			Controllers.refresh(true);
+			if (headless) {
+				try {
+					platform.load3D();
+				} catch (Throwable e) {
+					System.err.println("KEmulator headless: 3D not available: " + e);
+				}
+			} else {
+				platform.load3D();
+				Controllers.refresh(true);
+			}
 			Emulator.emulatorimpl.getLogStream().stdout(getCmdVersionString() + " Running on "
 					+ System.getProperty("os.name") + ' ' + System.getProperty("os.arch")
 					+ " (" + System.getProperty("os.version") + "), Java: "
@@ -644,12 +707,14 @@ public class Emulator implements Runnable {
 			Devices.load(Settings.deviceFile);
 			AppSettings.init();
 
-			setupMRUList();
+			if (!headless) {
+				setupMRUList();
 
-			if (Settings.autoUpdate == 0) {
-				Settings.autoUpdate = updated ? 2 : Emulator.emulatorimpl.getScreen().showUpdateDialog(0);
+				if (Settings.autoUpdate == 0) {
+					Settings.autoUpdate = updated ? 2 : Emulator.emulatorimpl.getScreen().showUpdateDialog(0);
+				}
+				backgroundThread.start();
 			}
-			backgroundThread.start();
 
 			if (Emulator.midletClassName == null && Emulator.midletJarPath == null) {
 				Emulator.emulatorimpl.getScreen().initScreen(AppSettings.screenWidth, AppSettings.screenHeight);
@@ -707,6 +772,9 @@ public class Emulator implements Runnable {
 				Emulator.emulatorimpl.openAppSettings(true);
 			}
 			tryToSetDevice();
+			if (headless) {
+				HeadlessOptions.applySettings();
+			}
 			Emulator.emulatorimpl.getScreen().initScreen(AppSettings.screenWidth, AppSettings.screenHeight);
 			Emulator.emulatorimpl.getScreen().setWindowIcon(inputStream);
 			setProperties();
@@ -726,7 +794,10 @@ public class Emulator implements Runnable {
 				}
 				Emulator.eventQueue = new EventQueue();
 			}
-			new Thread(new Emulator()).start();
+			if (headless) {
+				HeadlessRunner.beforeMidlet();
+			}
+			new Thread(VirtualClock.threadGroup(), new Emulator(), "KEmulator-MIDlet").start();
 			Emulator.emulatorimpl.getScreen().runWithMidlet();
 		} catch (UnsatisfiedLinkError e) {
 			e.printStackTrace();
@@ -795,6 +866,9 @@ public class Emulator implements Runnable {
 					Emulator.midletJarPath = getMidletJarUrl(key);
 				}
 			}
+			if (HeadlessOptions.isFlag(key)) {
+				continue;
+			}
 			String value = null;
 			if (i < array.length - 1) {
 				value = array[i + 1].trim();
@@ -861,9 +935,11 @@ public class Emulator implements Runnable {
 						startWidth = Integer.parseInt(size[0]);
 						startHeight = Integer.parseInt(size[1]);
 						Devices.writeProperties();
-						EmulatorScreen.sizeW = -1;
-						EmulatorScreen.sizeH = -1;
-						Settings.resizeMode = ResizeMethod.Fit;
+						if (!headless) {
+							EmulatorScreen.sizeW = -1;
+							EmulatorScreen.sizeH = -1;
+							Settings.resizeMode = ResizeMethod.Fit;
+						}
 					}
 				} else if (key.equalsIgnoreCase("key")) {
 					KeyMapping.keyArg(value);
@@ -976,6 +1052,9 @@ public class Emulator implements Runnable {
 	}
 
 	public static String getUserPath() {
+		if (userPathOverride != null) {
+			return userPathOverride;
+		}
 		installed:
 		{
 			if (!isPortable) {
@@ -1200,17 +1279,19 @@ public class Emulator implements Runnable {
 	}
 
 	public void run() {
+		VirtualClock.startGate();
 		if (!doja) {
 			try {
 				Emulator.setMIDlet((MIDlet) midletClass.newInstance());
 			} catch (Throwable e) {
 				e.printStackTrace();
+				midletException("MIDlet constructor", e);
 				eventQueue.stop();
 				emulatorimpl.getScreen().showMessageThreadSafe(UILocale.get("FAIL_LAUNCH_MIDLET", "Fail to launch the MIDlet class:") + " " + Emulator.midletClassName, CustomMethod.getStackTrace(e));
 				return;
 			}
 		}
-		if (Emulator.getEmulator() instanceof SWTFrontend) {
+		if (!headless && Emulator.getEmulator() instanceof SWTFrontend) {
 			SWTFrontend swt = (SWTFrontend) Emulator.getEmulator();
 			swt.getClassWatcher().fillClassList();
 			swt.getProfiler().fillClassList();

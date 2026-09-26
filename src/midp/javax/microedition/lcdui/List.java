@@ -2,6 +2,8 @@ package javax.microedition.lcdui;
 
 import emulator.UILocale;
 import emulator.lcdui.IListImpl;
+import emulator.lcdui.LCDUIUtils;
+import emulator.lcdui.ListLCDUI;
 import emulator.lcdui.ListSWT;
 
 public class List extends Screen implements Choice {
@@ -21,7 +23,8 @@ public class List extends Screen implements Choice {
 			throw new IllegalArgumentException();
 		}
 		this.type = type;
-		impl = new ListSWT(this, title, type, text, img);
+		impl = LCDUIUtils.useSwtWidgets() ? new ListSWT(this, title, type, text, img)
+				: new ListLCDUI(this, title, type, text, img);
 	}
 
 	public void setSelectCommand(Command cmd) {
@@ -229,6 +232,16 @@ public class List extends Screen implements Choice {
 
 	void _layout() {
 		impl.layout();
+	}
+
+	public void _invokeKeyPressed(final int n) {
+		if (!impl.isSWT() && impl.keyPressed(n, false)) return;
+		super._invokeKeyPressed(n);
+	}
+
+	public void _invokeKeyRepeated(final int n) {
+		if (!impl.isSWT() && impl.keyPressed(n, true)) return;
+		super._invokeKeyRepeated(n);
 	}
 
 	public Command _getSelectCommand() {
