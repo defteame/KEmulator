@@ -68,6 +68,20 @@ Graphics card:
 - File>Export...>Java>Runnable JAR file
 - Select launch configuration, export destination, and click Finish
 
+## Building from the command line
+- `headless/build.sh` builds the x64 flavour without an IDE into `out/headless` (a complete KEmulator directory); set `JAVA8_HOME` to a Java 8 JDK or JRE. See [HeadlessMode.md](HeadlessMode.md#building).
+
+## Headless mode
+KEmulator can run a MIDlet without a window, driven by a script, for automated tests: keys at exact times, checks of
+what is on the screen, screenshots, a trace of every frame, measurements, and an exit code. With virtual time
+(`-vtime`) runs are deterministic, frame for frame, and faster than real time.
+
+```
+headless/kemulator-headless.sh -jar game.jar -vtime -script test.txt -out results
+```
+
+See [HeadlessMode.md](HeadlessMode.md).
+
 ## Uses
 
 ### Libraries

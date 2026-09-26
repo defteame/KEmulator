@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# shell scripts run in bash on every system (also from WSL on a Windows checkout)
+headless/*.sh text eol=lf

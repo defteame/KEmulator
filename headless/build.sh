@@ -16,13 +16,14 @@
 # RT_JAR (its rt.jar). Without one the build targets Java 11 instead, and the
 # result needs Java 11 or later.
 #
-# Environment: OUT (default out/headless), JAVAC, JAR, JAVA8_HOME, RT_JAR.
+# Environment: OUT (default out/headless), BUILD (the work directory, default
+# out/build), JAVAC, JAR, JAVA8_HOME, RT_JAR.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 OUT="${OUT:-out/headless}"
-BUILD="out/build"
+BUILD="${BUILD:-out/build}"
 JAVAC="${JAVAC:-javac}"
 JAR="${JAR:-jar}"
 
@@ -90,7 +91,7 @@ find micro3d_sw/src -name '*.java' | sort > "$BUILD/micro3d_sw.txt"
 
 # the libraries first, so that KEmulator's own classes and resources win
 for lib in $LIBS; do
-	(cd "$BUILD/jar" && "$JAR" xf "../../../lib/$lib.jar")
+	(cd "$BUILD/jar" && "$JAR" xf "$ROOT/lib/$lib.jar")
 done
 rm -f "$BUILD/jar/META-INF/"*.SF "$BUILD/jar/META-INF/"*.RSA "$BUILD/jar/META-INF/"*.DSA \
 	"$BUILD/jar/META-INF/MANIFEST.MF" "$BUILD/jar/META-INF/INDEX.LIST"
